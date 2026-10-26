@@ -1,43 +1,110 @@
 @import "tailwindcss";
 
+/* Black & white base with a sky-blue accent. */
 @theme inline {
-  --color-brand: #ff5a36;
-  --color-brand-dark: #e2441f;
-  --color-brand-soft: #fff1ec;
-  --font-sans: system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --color-canvas: #0a0b0d;
+  --color-surface: #111317;
+  --color-surface-2: #16191e;
+  --color-surface-3: #1f2329;
+  --color-line: #252930;
+  --color-line-strong: #353a43;
+  --color-fg: #f5f7fa;
+  --color-fg-2: #a3abb7;
+  --color-fg-3: #6b7380;
+  --color-accent: #38bdf8;
+  --color-accent-hi: #7dd3fc;
+  --color-accent-deep: #0c4a6e;
+  --color-accent-bg: #0a1c27;
+  --color-primary: #38bdf8;
+  --color-primary-hi: #7dd3fc;
+  --color-on-primary: #04121b;
+  --color-success: #4ade80;
+  --color-success-bg: #0d1f15;
+  --color-success-line: #1f4d32;
+  --color-info: #93c5fd;
+  --color-info-bg: #0d1726;
+  --color-info-line: #1e3a5f;
+  --color-warn: #fbbf24;
+  --color-warn-bg: #221a08;
+  --color-warn-line: #5a4512;
+  --color-danger: #f87171;
+  --color-danger-bg: #261112;
+  --color-danger-line: #5a1f22;
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  /* Pretendard before the generic monospace fallback so Hangul inside mono labels isn't spaced out. */
+  --font-mono: var(--font-jetbrains), "Pretendard Variable", Pretendard, ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 body {
-  background: #f7f7f8;
-  color: #18181b;
+  background: var(--color-canvas);
+  color: var(--color-fg);
   font-family: var(--font-sans);
   -webkit-tap-highlight-color: transparent;
+  /* Korean: wrap between words, not inside them; still break long URLs. */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+::selection {
+  background: rgb(56 189 248 / 0.3);
+}
+
+/* Brand gradients and glows live here so the palette changes in one place. */
+@utility brand-gradient {
+  background-image: linear-gradient(135deg, #7dd3fc 0%, #0ea5e9 55%, #0369a1 100%);
+}
+
+@utility brand-gradient-x {
+  background-image: linear-gradient(90deg, #e0f2fe, #38bdf8 60%, #0284c7);
+}
+
+@utility text-gradient {
+  background-image: linear-gradient(90deg, #ffffff 0%, #bae6fd 45%, #38bdf8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility glow {
+  box-shadow: 0 0 22px -6px rgb(56 189 248 / 0.7);
+}
+
+@utility glow-lg {
+  box-shadow: 0 12px 40px -14px rgb(56 189 248 / 0.45);
 }
 
 @utility card {
-  @apply rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200;
+  @apply rounded-xl border border-line bg-surface p-4 shadow-[inset_0_1px_0_rgb(255_255_255/0.04)];
 }
 
 @utility btn {
-  @apply inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-40;
 }
 
 @utility btn-primary {
-  @apply btn bg-brand text-white hover:bg-brand-dark;
+  @apply btn bg-primary font-semibold text-on-primary shadow-[0_0_0_1px_rgb(125_211_252/0.5),0_8px_24px_-12px_rgb(56_189_248/0.8)] hover:bg-primary-hi;
 }
 
-@utility btn-ghost {
-  @apply btn bg-zinc-100 text-zinc-800 hover:bg-zinc-200;
+@utility btn-secondary {
+  @apply btn border border-line-strong bg-surface-2 text-fg hover:bg-surface-3;
+}
+
+@utility btn-mini {
+  @apply inline-flex items-center gap-1 rounded-md border border-line bg-surface-2 px-2 py-1 text-xs text-fg-2 transition hover:border-line-strong hover:text-fg;
 }
 
 @utility input {
-  @apply w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20;
+  @apply w-full rounded-lg border border-line bg-canvas px-3 py-2.5 text-sm text-fg outline-none transition placeholder:text-fg-3 focus:border-accent focus:ring-2 focus:ring-accent/25;
 }
 
 @utility chip {
-  @apply inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition;
+  @apply inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition;
+}
+
+@utility eyebrow {
+  @apply font-mono text-[11px] font-medium tracking-[0.14em] text-accent uppercase;
 }

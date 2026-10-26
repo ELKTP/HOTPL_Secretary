@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { Bookmark, CircleCheck, CircleHelp, LoaderCircle, TriangleAlert } from "lucide-react";
 import { api, toImageInput } from "@/lib/client";
 import type { ImageInput } from "@/lib/types";
 
@@ -67,21 +68,24 @@ export default function SharePage() {
   }, []);
 
   const view = {
-    saving: { icon: "⏳", title: "저장하는 중…", body: "잠시만 기다려 주세요." },
-    saved: { icon: "✅", title: "저장했어요!", body: "장소 분석은 자동으로 진행돼요. 이제 원래 앱으로 돌아가셔도 돼요." },
-    duplicate: { icon: "👌", title: "이미 저장한 게시물이에요", body: "내 장소에서 확인할 수 있어요." },
-    empty: { icon: "🤔", title: "공유된 내용이 없어요", body: "링크나 스크린샷을 공유해 주세요." },
-    error: { icon: "⚠️", title: "저장하지 못했어요", body: message || "잠시 후 다시 시도해 주세요." },
+    saving: { icon: LoaderCircle, tone: "border-accent-deep bg-accent-bg text-accent", spin: true, title: "저장하는 중…", body: "잠시만 기다려 주세요." },
+    saved: { icon: CircleCheck, tone: "border-success-line bg-success-bg text-success", spin: false, title: "저장했어요!", body: "장소 분석은 자동으로 진행돼요. 이제 원래 앱으로 돌아가셔도 돼요." },
+    duplicate: { icon: Bookmark, tone: "border-info-line bg-info-bg text-info", spin: false, title: "이미 저장한 게시물이에요", body: "내 장소에서 확인할 수 있어요." },
+    empty: { icon: CircleHelp, tone: "border-line bg-surface-2 text-fg-2", spin: false, title: "공유된 내용이 없어요", body: "링크나 스크린샷을 공유해 주세요." },
+    error: { icon: TriangleAlert, tone: "border-danger-line bg-danger-bg text-danger", spin: false, title: "저장하지 못했어요", body: message || "잠시 후 다시 시도해 주세요." },
   }[state];
+  const Icon = view.icon;
 
   return (
-    <div className="py-16 text-center">
-      <div className="text-5xl">{view.icon}</div>
-      <h1 className="mt-4 text-xl font-bold">{view.title}</h1>
-      <p className="mt-2 text-sm text-zinc-500">{view.body}</p>
+    <div className="flex flex-col items-center py-20 text-center">
+      <span className={`grid h-16 w-16 place-items-center rounded-2xl border ${view.tone}`}>
+        <Icon className={`h-7 w-7 ${view.spin ? "animate-spin" : ""}`} />
+      </span>
+      <h1 className="mt-5 text-xl font-bold tracking-tight">{view.title}</h1>
+      <p className="mt-2 max-w-xs text-sm text-fg-2">{view.body}</p>
       {state !== "saving" && (
         <div className="mt-8 flex justify-center gap-2">
-          <Link href="/" className="btn-ghost">
+          <Link href="/" className="btn-secondary">
             홈으로
           </Link>
           <Link href="/places" className="btn-primary">

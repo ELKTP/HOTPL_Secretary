@@ -61,6 +61,15 @@ export function mapLinks(place: Pick<Place, "name" | "area">) {
   ];
 }
 
+export function timeAgo(iso: string) {
+  const seconds = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (seconds < 60) return "방금";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}분 전`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}시간 전`;
+  if (seconds < 86400 * 7) return `${Math.floor(seconds / 86400)}일 전`;
+  return new Date(iso).toLocaleDateString("ko-KR");
+}
+
 export const SOURCE_LABEL: Record<string, string> = {
   instagram: "인스타그램",
   youtube: "유튜브",
