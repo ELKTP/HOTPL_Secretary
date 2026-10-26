@@ -1,5 +1,10 @@
 export type ItemStatus = "pending" | "done" | "no_place" | "needs_input" | "error";
 export type PlaceStatus = "want" | "visited" | "skip";
+export type PeriodStatus = "none" | "unverified" | "verified" | "not_found";
+
+/** Place kinds. Everything except "상설" is a time-limited event. "이벤트" is a legacy value. */
+export const KINDS = ["상설", "팝업", "전시", "공연", "페스티벌", "행사"] as const;
+export const isTemporary = (kind: string | null | undefined) => !!kind && kind !== "상설";
 
 export interface Item {
   id: string;
@@ -25,15 +30,20 @@ export interface Place {
   kind: string;
   start_date: string | null;
   end_date: string | null;
+  period_status: PeriodStatus;
+  period_note: string | null;
+  period_source: string | null;
   hours: string | null;
   price: string | null;
   tags: string[];
   good_for: string[];
   summary: string | null;
   source_url: string | null;
+  sources: string[];
   save_count: number;
   status: PlaceStatus;
   memo: string | null;
+  enriched_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -80,6 +90,23 @@ export interface RecommendResult {
   weather: WeatherSummary | null;
   /** Why weather is missing, e.g. the date is beyond the 16-day forecast window. */
   weatherNote?: string;
+}
+
+/** POST /api/places/dedupe */
+export interface DedupeResult {
+  before: number;
+  after: number;
+  groups: { name: string; count: number }[];
+}
+
+/** POST /api/places/refresh */
+export interface RefreshResult {
+  checked: number;
+  failed: number;
+  remaining: number;
+  /** false if the web search could not run, so only source posts were used. */
+  searched: boolean;
+  names: string[];
 }
 
 /** Anything people can visit in person. "기타" catches the rest. */

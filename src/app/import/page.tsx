@@ -16,6 +16,7 @@ import {
   Type,
   type LucideIcon,
 } from "lucide-react";
+import { CleanupPanel, useCleanup } from "@/components/Cleanup";
 import { api, runPool, toImageInput } from "@/lib/client";
 import { chunkText, emptyPlan, planFromFile, type Plan } from "@/lib/importers";
 
@@ -224,6 +225,7 @@ export default function ImportPage() {
   const [pasted, setPasted] = useState("");
   const imageRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const cleanup = useCleanup();
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -270,6 +272,8 @@ export default function ImportPage() {
 
     setRunning(false);
     setPlan(null);
+    // Merge duplicates across everything just imported, then enrich descriptions and event periods.
+    if (stats.places) await cleanup.run();
   }
 
   return (
@@ -367,10 +371,12 @@ export default function ImportPage() {
           <p className="text-xs text-fg-3">
             {running
               ? "이 화면을 닫지 말고 기다려 주세요. 링크가 많으면 몇 분 걸려요."
-              : "‘내 장소’에서 확인하세요. 확인이 필요한 항목은 ‘취향 더하기’ 목록에 있어요."}
+              : "가져오기가 끝나면 중복을 합치고 설명을 보강해요. 확인이 필요한 항목은 ‘취향 더하기’ 목록에 있어요."}
           </p>
         </div>
       )}
+
+      <CleanupPanel state={cleanup.state} />
     </div>
   );
 }

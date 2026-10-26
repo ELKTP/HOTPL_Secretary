@@ -23,18 +23,23 @@ create table if not exists public.places (
   category text,
   area text,
   address text,
-  kind text not null default '상설',        -- 상설 | 팝업 | 이벤트
+  kind text not null default '상설',        -- 상설 | 팝업 | 전시 | 공연 | 페스티벌 | 행사
   start_date date,
   end_date date,
+  period_status text not null default 'none', -- none | unverified | verified | not_found
+  period_note text,
+  period_source text,
   hours text,
   price text,
   tags text[] not null default '{}',
   good_for text[] not null default '{}',
   summary text,
   source_url text,
+  sources text[] not null default '{}',     -- 합쳐진 모든 출처 링크
   save_count int not null default 1,
   status text not null default 'want',      -- want | visited | skip
   memo text,
+  enriched_at timestamptz,                  -- 원본·웹 후기로 설명을 보강한 시각
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

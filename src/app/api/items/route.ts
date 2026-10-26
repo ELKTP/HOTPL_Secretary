@@ -50,7 +50,8 @@ export async function POST(request: Request) {
   if (error || !item) return jsonError(`저장 실패: ${error?.message}`, 500);
 
   if (body.wait) {
-    const result = await processItem(supabase, item as Item, images);
+    // Bulk import: skip web enrichment here; the cleanup pass enriches after merging duplicates.
+    const result = await processItem(supabase, item as Item, images, { enrich: false });
     return Response.json({ id: item.id, ...result });
   }
   after(() => processItem(supabase, item as Item, images));

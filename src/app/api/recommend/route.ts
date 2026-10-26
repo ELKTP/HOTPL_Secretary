@@ -13,7 +13,10 @@ function describe(p: Place, id: string) {
     p.category,
     p.name,
     p.area || p.address || "지역 미상",
-    p.kind !== "상설" ? `${p.kind} ${p.start_date ?? "?"}~${p.end_date ?? "?"}` : null,
+    p.kind !== "상설"
+      ? `${p.kind} ${p.start_date ?? "?"}~${p.end_date ?? "?"}${p.period_status === "verified" ? "(확인됨)" : "(미확인)"}`
+      : null,
+    p.period_note && `일정 ${p.period_note}`,
     p.hours && `영업 ${p.hours}`,
     p.price && `가격 ${p.price}`,
     p.tags.length ? `특징 ${p.tags.join(",")}` : null,
@@ -21,7 +24,7 @@ function describe(p: Place, id: string) {
     p.save_count > 1 ? `저장 ${p.save_count}회` : null,
     p.status === "visited" ? "다녀온 곳" : null,
     p.memo && `메모 ${p.memo}`,
-    p.summary,
+    p.summary?.replace(/\s*\n\s*/g, " ").slice(0, 260),
   ];
   return fields.filter(Boolean).join(" | ");
 }

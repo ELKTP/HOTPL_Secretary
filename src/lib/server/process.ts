@@ -1,56 +1,118 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ImageInput, Item, Place } from "@/lib/types";
-import { extractPlaces, type ExtractedPlace } from "./claude";
-import { fetchContent } from "./content";
+import { isTemporary, type ImageInput, type Item, type Place } from "@/lib/types";
+import { extractPlaces, refreshPlaceInfo, type ExtractedPlace } from "./claude";
+import { detectSource, fetchContent } from "./content";
+import { dbError, facts, findMatch, mergedFields, quickDecision } from "./dedupe";
 
-const normalize = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, "").toLowerCase();
-
-/** Same place if names match ignoring spaces and the areas don't contradict each other. */
-function isSamePlace(existing: Place, p: ExtractedPlace) {
-  if (normalize(existing.name) !== normalize(p.name)) return false;
-  const a = normalize(existing.area);
-  const b = normalize(p.area);
-  return !a || !b || a.includes(b) || b.includes(a) || a.slice(0, 4) === b.slice(0, 4);
+/** Text of the posts a place came from: the saved share text plus re-fetched source links. */
+async function sourceTextFor(supabase: SupabaseClient, place: Place) {
+  const parts: string[] = [];
+  if (place.item_id) {
+    const { data: item } = await supabase.from("items").select("shared_text,extra_text").eq("id", place.item_id).maybeSingle();
+    if (item?.shared_text) parts.push(item.shared_text);
+    if (item?.extra_text) parts.push(item.extra_text);
+  }
+  const urls = [...new Set([...(place.sources ?? []), place.source_url].filter((u): u is string => !!u))].slice(0, 3);
+  const fetched = await Promise.all(urls.map((u) => fetchContent(u, detectSource(u))));
+  fetched.forEach((text, i) => text && parts.push(`[${urls[i]}]\n${text}`));
+  return parts.join("\n\n").slice(0, 12000);
 }
 
-async function savePlace(supabase: SupabaseClient, item: Item, p: ExtractedPlace) {
-  const { data: candidates } = await supabase
-    .from("places")
-    .select("*")
-    .ilike("name", `%${p.name.replace(/[%_]/g, "").replace(/\s+/g, "%")}%`)
-    .limit(20);
-  const existing = (candidates as Place[] | null)?.find((c) => isSamePlace(c, p));
+/**
+ * Rewrites the description from source posts and web research, and for events confirms the period.
+ * Returns whether the web search ran.
+ */
+export async function refreshPlace(supabase: SupabaseClient, place: Place) {
+  const info = await refreshPlaceInfo({ ...place, tags: place.tags ?? [] }, await sourceTextFor(supabase, place));
+  const event = isTemporary(place.kind);
+  const update = {
+    summary: info.summary,
+    tags: [...new Set([...(place.tags ?? []), ...info.tags])].slice(0, 12),
+    hours: place.hours ?? info.hours,
+    price: place.price ?? info.price,
+    address: place.address ?? info.address,
+    enriched_at: new Date().toISOString(),
+    ...(event && info.period.found
+      ? {
+          period_status: "verified",
+          start_date: info.period.start_date ?? place.start_date,
+          end_date: info.period.end_date ?? place.end_date,
+          period_note: info.period.schedule ?? place.period_note,
+          period_source: info.period.source_url,
+        }
+      : {}),
+    // Searched but found nothing: mark as checked. Search unavailable: leave "unverified" to retry later.
+    ...(event && !info.period.found && info.searched ? { period_status: "not_found" } : {}),
+  };
+  const { error } = await supabase.from("places").update(update).eq("id", place.id);
+  if (error) throw dbError(error, "장소 정보 저장 실패");
+  return { place: { ...place, ...update } as Place, searched: info.searched };
+}
 
-  if (existing) {
-    await supabase
-      .from("places")
-      .update({
-        save_count: existing.save_count + 1,
-        tags: Array.from(new Set([...existing.tags, ...p.tags])),
-        good_for: Array.from(new Set([...existing.good_for, ...p.good_for])),
-        address: existing.address ?? p.address,
-        hours: existing.hours ?? p.hours,
-        price: existing.price ?? p.price,
-        start_date: p.start_date ?? existing.start_date,
-        end_date: p.end_date ?? existing.end_date,
-        summary: existing.summary ?? p.summary,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", existing.id);
-    return;
-  }
+async function loadPlaces(supabase: SupabaseClient) {
+  const { data, error } = await supabase.from("places").select("*").limit(5000);
+  if (error) throw dbError(error, "장소 목록 조회 실패");
+  return data as Place[];
+}
 
-  const { error } = await supabase.from("places").insert({
+/**
+ * Two saves of the same place can run at once (bulk import). After inserting, look for a
+ * twin created in the last few minutes; the newer row folds into the older one.
+ */
+async function settleRace(supabase: SupabaseClient, inserted: Place): Promise<Place> {
+  const since = new Date(Date.now() - 15 * 60_000).toISOString();
+  const { data } = await supabase.from("places").select("*").gte("created_at", since).neq("id", inserted.id);
+  const f = facts(inserted);
+  const older = (data as Place[] | null)
+    ?.filter((p) => p.created_at <= inserted.created_at && quickDecision(facts(p), f) === "same")
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
+  if (!older) return inserted;
+  const fields = mergedFields(older, [inserted]);
+  await supabase.from("places").update(fields).eq("id", older.id);
+  await supabase.from("places").delete().eq("id", inserted.id);
+  return { ...older, ...fields } as Place;
+}
+
+/** Adds a place, or bumps the existing entry it duplicates (one more star). Returns the stored row. */
+async function savePlace(supabase: SupabaseClient, existing: Place[], item: Item, p: ExtractedPlace): Promise<Place> {
+  const row = {
+    ...p,
     user_id: item.user_id,
     item_id: item.id,
-    ...p,
     source_url: item.url,
-  });
-  if (error) throw new Error(`장소 저장 실패: ${error.message}`);
+    sources: item.url ? [item.url] : [],
+    save_count: 1,
+    period_status: isTemporary(p.kind) ? "unverified" : "none",
+  };
+  const match = await findMatch(existing, row);
+
+  if (match) {
+    const fields = mergedFields(match, [row as unknown as Place]);
+    const { error } = await supabase.from("places").update(fields).eq("id", match.id);
+    if (error) throw dbError(error, "장소 업데이트 실패");
+    const merged = { ...match, ...fields } as Place;
+    existing.splice(existing.indexOf(match), 1, merged);
+    return merged;
+  }
+
+  const { data, error } = await supabase.from("places").insert(row).select().single();
+  if (error || !data) throw dbError(error!, "장소 저장 실패");
+  const saved = await settleRace(supabase, data as Place);
+  existing.push(saved);
+  return saved;
 }
 
-/** Gathers the item's text, asks Claude for places, saves them, and records the outcome on the item. */
-export async function processItem(supabase: SupabaseClient, item: Item, images: ImageInput[] = []) {
+/**
+ * Gathers the item's text, asks Claude for places, saves them, and records the outcome on the item.
+ * With `enrich`, each saved place is also researched on the web right away (single shares);
+ * bulk imports skip it and let the cleanup pass enrich after duplicates are merged.
+ */
+export async function processItem(
+  supabase: SupabaseClient,
+  item: Item,
+  images: ImageInput[] = [],
+  { enrich = true }: { enrich?: boolean } = {},
+) {
   try {
     const parts: string[] = [];
     if (item.shared_text) parts.push(`[공유된 텍스트]\n${item.shared_text}`);
@@ -63,7 +125,13 @@ export async function processItem(supabase: SupabaseClient, item: Item, images: 
 
     const result = await extractPlaces(parts.join("\n\n"), images);
     const places = result.status === "places" ? result.places.filter((p) => p.name.trim()) : [];
-    for (const p of places) await savePlace(supabase, item, p);
+    if (places.length) {
+      const existing = await loadPlaces(supabase);
+      for (const p of places) {
+        const saved = await savePlace(supabase, existing, item, p);
+        if (enrich) await refreshPlace(supabase, saved).catch(() => {});
+      }
+    }
 
     await supabase
       .from("items")
