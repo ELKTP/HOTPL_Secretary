@@ -3,10 +3,12 @@
 SNS에서 스쳐 지나간 카페·팝업·핫플을 모아 두면, 약속이 생겼을 때 **지역·날짜·시간·목적·동행인**에 맞는 곳을 골라 주는 웹앱입니다.
 
 - **계정별 DB**: 각자 가입해서 자기 장소만 쌓고, 자기 장소 중에서만 추천받습니다.
-- **저장 방법**
-  - 웹: 앱에서 링크 복사 → 핫플비서 홈의 붙여넣기 버튼, 또는 스크린샷 올리기
+- **추천 (홈)**: 지역·날짜·시간·목적·동행인은 모두 선택 입력입니다. 날짜를 넣으면 그날 날씨 예보를 반영하고, 결과마다 장소 정보와 카카오맵·네이버지도·구글지도 링크를 보여줍니다.
+- **취향 더하기**
+  - 웹: 앱에서 링크 복사 → 붙여넣기 버튼, 또는 스크린샷 올리기
   - 안드로이드 (홈 화면에 추가했을 때): 인스타·유튜브·지도 앱에서 **공유 → 핫플비서**
-- **처음 가져오기**: 지도 앱 저장 목록 스크린샷, 구글 테이크아웃 CSV/JSON, 인스타 '내 정보 다운로드' JSON
+- **처음 가져오기**: 처음 로그인하면 안내 창이 뜹니다. 카카오맵·네이버지도는 저장 목록 스크린샷, 구글지도·유튜브는 구글 테이크아웃 ZIP, 인스타그램은 '내 정보 내보내기' ZIP을 그대로 올리면 됩니다. 출처별 단계 안내가 앱 안에 있습니다.
+- **장소 범위**: 음식점·카페·술집·상점·팝업·전시·관광지·체험공간·공원·레저시설·숙소 등 오프라인으로 방문할 수 있는 모든 곳
 - **AI**: Claude Haiku 5.5가 게시물에서 장소 정보를 추출하고, 약속 조건에 맞는 장소를 추천합니다.
 
 ## 구성
@@ -18,9 +20,10 @@ SNS에서 스쳐 지나간 카페·팝업·핫플을 모아 두면, 약속이 �
 | AI | Claude API (`claude-haiku-5-5`) |
 
 ```
-src/app/            화면: 홈(/), 내 장소(/places), 약속 추천(/recommend), 가져오기(/import), 공유 수신(/share)
+src/app/            화면: 홈·추천(/), 취향 더하기(/add), 내 장소(/places), 가져오기(/import), 공유 수신(/share)
 src/app/api/        서버 API: 저장·분석(/api/items), 재분석(/api/items/[id]/retry), 추천(/api/recommend)
-src/lib/server/     링크 본문 가져오기(content), Claude 호출(claude), 장소 저장·중복 병합(process)
+src/lib/importers.ts  내보내기 파일(ZIP·CSV·JSON) 분석
+src/lib/server/     링크 본문 가져오기(content), Claude 호출(claude), 장소 저장·중복 병합(process), 날씨(weather)
 src/app/manifest.ts, public/sw.js   안드로이드 공유 메뉴 연동(PWA)
 supabase/schema.sql DB 테이블·보안 정책
 ```
@@ -41,12 +44,12 @@ supabase/schema.sql DB 테이블·보안 정책
 ### 3. GitHub에 올리기
 [github.com/new](https://github.com/new)에서 빈 저장소를 만든 뒤(README 추가 없이), 이 폴더에서 아래 명령을 실행합니다.
 ```bash
-git config --global user.name "내 이름"          # 처음 한 번만
-git config --global user.email "내 이메일"       # 처음 한 번만
+git config --global user.name "KSS"          # 처음 한 번만
+git config --global user.email "elir3173@gmail.com"       # 처음 한 번만
 git init -b main
 git add .
 git commit -m "핫플비서 첫 버전"
-git remote add origin https://github.com/<내 아이디>/<저장소 이름>.git
+git remote add origin https://github.com/ELKTP/HOTPL_Secretary.git
 git push -u origin main                          # 브라우저 로그인 창이 뜨면 GitHub 로그인
 ```
 
@@ -78,7 +81,8 @@ npm run dev                  # http://localhost:3000
 ```
 
 ## 알아둘 점
-- **인스타그램 링크**: 서버가 본문을 가져오지 못하는 경우가 있습니다(비공개·삭제 게시물, 서버 차단 등). 이런 항목은 홈에서 '확인 필요'로 표시되니 캡션을 붙여넣거나 스크린샷을 추가하면 됩니다. 처음부터 스크린샷으로 공유하는 것이 가장 확실합니다.
+- **인스타그램 링크**: 서버가 본문을 가져오지 못하는 경우가 있습니다(비공개·삭제 게시물, 서버 차단 등). 이런 항목은 '취향 더하기' 목록에 '확인 필요'로 표시되니 캡션을 붙여넣거나 스크린샷을 추가하면 됩니다. 처음부터 스크린샷으로 공유하는 것이 가장 확실합니다.
 - **카카오맵·네이버지도 저장 목록**: 내보내기 기능이 없어서 저장 목록 화면 스크린샷으로 가져옵니다.
 - **추천의 지역 판단**: 지역명 기준이라 정밀한 거리 계산은 하지 않습니다. 지도 바로가기는 각 지도 앱의 검색으로 연결됩니다.
+- **날씨**: [Open-Meteo](https://open-meteo.com) 예보(키 불필요, 비상업적 사용 무료)를 씁니다. 오늘부터 16일 뒤까지만 예보가 있고, 지역을 비워 두면 서울 기준입니다.
 - **비용**: Haiku 5.5 기준 게시물 1건 분석은 약 $0.001, 추천 1회는 약 $0.01입니다. 모델을 바꾸려면 `CLAUDE_MODEL` 환경변수를 설정하세요.

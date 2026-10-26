@@ -44,12 +44,13 @@ export interface ImageInput {
   media_type: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
 }
 
+/** Every field is optional; the recommender fills gaps with sensible defaults. */
 export interface RecommendInput {
-  area: string;
-  date: string;
-  time: string;
-  purpose: string;
-  companions: string;
+  area?: string;
+  date?: string;
+  time?: string;
+  purpose?: string;
+  companions?: string;
   extra?: string;
   includeVisited?: boolean;
   count?: number;
@@ -61,22 +62,39 @@ export interface RecommendPick {
   tip: string;
 }
 
+export interface WeatherSummary {
+  date: string;
+  location: string;
+  /** WMO weather code for the day */
+  code: number;
+  label: string;
+  tempMin: number;
+  tempMax: number;
+  precipProbability: number | null;
+}
+
 export interface RecommendResult {
   summary: string;
   course: string | null;
   picks: RecommendPick[];
+  weather: WeatherSummary | null;
+  /** Why weather is missing, e.g. the date is beyond the 16-day forecast window. */
+  weatherNote?: string;
 }
 
+/** Anything people can visit in person. "기타" catches the rest. */
 export const CATEGORIES = [
   "카페",
   "베이커리/디저트",
   "음식점",
   "술집/바",
-  "팝업",
+  "팝업스토어",
+  "쇼핑/스토어",
   "전시/공연",
   "체험/클래스",
-  "쇼핑",
-  "공원/산책",
+  "관광지/명소",
+  "자연/공원",
+  "액티비티/레저",
   "숙소",
   "기타",
 ] as const;

@@ -99,7 +99,9 @@ const EXTRACTION_SYSTEM = `너는 사용자가 SNS·지도 앱에서 저장한 �
 입력은 공유된 텍스트, 링크에서 가져온 내용, 스크린샷, 파일 내용 중 일부다.
 
 규칙:
-- 실제로 방문할 수 있는 장소(카페, 음식점, 술집, 팝업스토어, 전시, 체험, 쇼핑, 공원 등)만 뽑는다. 한 콘텐츠에 여러 곳이 있으면 모두 뽑는다.
+- 오프라인으로 직접 방문할 수 있는 장소는 종류를 가리지 않고 모두 뽑는다: 음식점, 카페, 베이커리, 술집, 상점·편집숍·쇼룸, 팝업스토어, 전시·공연장, 관광지·명소·랜드마크, 체험공간·공방·클래스, 공원·자연·산책로, 레저·액티비티 시설, 숙소 등.
+- 한 콘텐츠에 여러 곳이 있으면 모두 뽑는다. 온라인 쇼핑몰·앱·제품 자체처럼 방문할 수 없는 대상은 제외한다.
+- category는 목록에서 가장 가까운 것을 고르고, 애매하면 "기타"로 한다.
 - 콘텐츠에 없는 정보는 지어내지 않는다. 모르는 값은 null로 둔다. 주소는 콘텐츠에 있거나 널리 알려진 경우에만 쓴다.
 - area는 "서울 성동구 성수동"처럼 시/구/동 수준으로, 아는 만큼만 쓴다(예: "서울 성수동", "부산 해운대").
 - 팝업·전시 등 기간이 있으면 kind를 "팝업" 또는 "이벤트"로 하고 start_date/end_date를 YYYY-MM-DD로 쓴다. 연도가 없으면 오늘 날짜 기준으로 가장 그럴듯한 연도를 쓴다.
@@ -161,18 +163,47 @@ const RECOMMEND_SCHEMA = {
 
 const RECOMMEND_SYSTEM = `너는 사용자가 평소 저장해 둔 "가보고 싶은 장소" 목록에서 약속 장소를 골라 주는 비서다.
 반드시 후보 목록에 있는 장소만 id로 추천한다. 목록에 없는 장소는 절대 만들지 않는다.
+약속 정보 중 "미정"인 항목은 제약이 없다는 뜻이다. 입력된 항목만으로 판단하고, 미정 항목은 다양한 선택지를 섞어 추천한다.
 
 판단 기준(중요한 순서):
-1. 지역: 약속 지역과 같은 동네이거나 대중교통으로 가까운 곳. 지역이 많이 다르면 제외한다.
+1. 지역: 지역이 정해졌으면 같은 동네이거나 대중교통으로 가까운 곳만. 지역이 많이 다르면 제외한다.
 2. 날짜·시간: 팝업 기간, 휴무일·영업시간이 알려져 있으면 맞는 곳만. 정보가 없으면 후보로 두되 tip에 "방문 전 영업시간 확인"을 쓴다.
-3. 목적·동행인과의 궁합: 분위기, 소음, 좌석, 아이·반려동물 동반 가능 여부 등.
-4. 사용자의 관심도: 여러 번 저장한 곳(저장 횟수), 곧 끝나는 팝업은 우선한다.
+3. 날씨: 날씨 정보가 있으면 반영한다. 비·눈·폭염·한파·강풍이면 실내 장소를 우선하고, 맑고 선선하면 야외·테라스·산책·뷰 장소에 가산한다. 날씨를 반영했다면 reason이나 summary에 짧게 언급한다.
+4. 목적·동행인과의 궁합: 분위기, 소음, 좌석, 아이·반려동물 동반 가능 여부 등.
+5. 사용자의 관심도: 여러 번 저장한 곳(저장 횟수), 곧 끝나는 팝업은 우선한다.
 
 출력:
 - picks는 요청한 개수 이내로, 좋은 순서대로. 조건에 맞는 곳이 적으면 적게 추천해도 된다.
 - reason은 이 약속에 왜 맞는지 1~2문장, tip은 실용 팁 한 문장(예약, 웨이팅, 추천 메뉴, 확인할 점).
 - course는 코스를 요청했을 때만 "식사(A) → 카페(B) → 산책(C)"처럼 동선을 쓰고, 아니면 null.
 - summary는 추천 전체를 한 문장으로 요약한다. 마땅한 후보가 없으면 그 이유와 어떤 장소를 저장해 두면 좋을지 쓴다.`;
+
+// ---------- 지역명 → 좌표 (날씨 조회용) ----------
+
+const LOCATION_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    found: { type: "boolean" },
+    label: { type: "string" },
+    latitude: { type: "number" },
+    longitude: { type: "number" },
+  },
+  required: ["found", "label", "latitude", "longitude"],
+};
+
+/** Resolves a Korean area name ("성수역", "부산 해운대") to approximate coordinates. */
+export async function locateArea(area: string) {
+  const res = await callJson<{ found: boolean; label: string; latitude: number; longitude: number }>({
+    system:
+      "한국(또는 해외) 지명·역·동네 이름을 받아 대략적인 중심 좌표를 알려준다. label은 '서울 성동구 성수동'처럼 짧은 한국어 지명. 어디인지 알 수 없으면 found를 false로 한다.",
+    content: [{ type: "text", text: area }],
+    schema: LOCATION_SCHEMA,
+    effort: "low",
+    maxTokens: 2000,
+  });
+  return res.found ? res : null;
+}
 
 export async function recommendPlaces(request: string, candidates: string): Promise<RecommendationRaw> {
   return callJson<RecommendationRaw>({

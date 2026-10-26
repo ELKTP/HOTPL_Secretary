@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Calendar, Clock, ExternalLink, Heart, MapPin, Trash2, Wallet } from "lucide-react";
+import { Calendar, Clock, ExternalLink, Heart, MapPin, NotebookPen, Trash2, Wallet } from "lucide-react";
 import { mapLinks } from "@/lib/client";
 import type { Place, PlaceStatus } from "@/lib/types";
 
@@ -12,12 +12,15 @@ export default function PlaceCard({
   onStatus,
   onDelete,
   badge,
+  mapButtons,
   children,
 }: {
   place: Place;
   onStatus?: (status: PlaceStatus) => void;
   onDelete?: () => void;
   badge?: ReactNode;
+  /** Show Kakao / Naver / Google map links as full-size buttons (recommendation results). */
+  mapButtons?: boolean;
   children?: ReactNode;
 }) {
   const period =
@@ -29,6 +32,7 @@ export default function PlaceCard({
     place.hours && { icon: Clock, text: place.hours },
     place.price && { icon: Wallet, text: place.price },
     place.address && { icon: MapPin, text: place.address },
+    place.memo && { icon: NotebookPen, text: `메모: ${place.memo}` },
   ].filter(Boolean) as { icon: typeof Calendar; text: string }[];
 
   return (
@@ -95,13 +99,25 @@ export default function PlaceCard({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-1.5 border-t border-line pt-3">
-        {mapLinks(place).map((l) => (
-          <a key={l.label} href={l.href} target="_blank" rel="noreferrer" className="btn-mini">
-            <MapPin className="h-3 w-3" />
-            {l.label}
-          </a>
-        ))}
+      {mapButtons && (
+        <div className="grid grid-cols-3 gap-2 border-t border-line pt-3">
+          {mapLinks(place).map((l) => (
+            <a key={l.label} href={l.href} target="_blank" rel="noreferrer" className="btn-secondary px-2 py-2 text-xs">
+              <MapPin className="h-3.5 w-3.5 text-accent" />
+              {l.label}
+            </a>
+          ))}
+        </div>
+      )}
+
+      <div className={`flex flex-wrap items-center gap-1.5 ${mapButtons ? "" : "border-t border-line pt-3"}`}>
+        {!mapButtons &&
+          mapLinks(place).map((l) => (
+            <a key={l.label} href={l.href} target="_blank" rel="noreferrer" className="btn-mini">
+              <MapPin className="h-3 w-3" />
+              {l.label}
+            </a>
+          ))}
         {place.source_url && (
           <a href={place.source_url} target="_blank" rel="noreferrer" className="btn-mini">
             <ExternalLink className="h-3 w-3" />

@@ -1,5 +1,6 @@
 import { authenticate, jsonError } from "@/lib/server/auth";
 import { recommendPlaces, todayInSeoul } from "@/lib/server/claude";
+import { getWeather } from "@/lib/server/weather";
 import type { Place, RecommendInput, RecommendResult } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -30,15 +31,18 @@ export async function POST(request: Request) {
   if (!auth) return jsonError("로그인이 필요합니다.", 401);
 
   const input = (await request.json()) as RecommendInput;
-  if (!input.area?.trim()) return jsonError("약속 지역을 입력해 주세요.", 400);
+  const area = input.area?.trim();
   const date = input.date || todayInSeoul();
 
-  const { data, error } = await auth.supabase
-    .from("places")
-    .select("*")
-    .in("status", input.includeVisited ? ["want", "visited"] : ["want"])
-    .order("updated_at", { ascending: false })
-    .limit(400);
+  const [{ data, error }, weather] = await Promise.all([
+    auth.supabase
+      .from("places")
+      .select("*")
+      .in("status", input.includeVisited ? ["want", "visited"] : ["want"])
+      .order("updated_at", { ascending: false })
+      .limit(400),
+    input.date ? getWeather(area, date) : Promise.resolve({ weather: null, text: "", note: undefined }),
+  ]);
   if (error) return jsonError(error.message, 500);
 
   // Drop pop-ups and events that are not running on the appointment date.
@@ -47,21 +51,24 @@ export async function POST(request: Request) {
   );
   if (!places.length) {
     return Response.json({
-      summary: "그 날짜에 추천할 수 있는 저장 장소가 없어요. 먼저 장소를 저장하거나 가져와 주세요.",
+      summary: "추천할 수 있는 저장 장소가 없어요. '취향 더하기'나 '가져오기'로 먼저 장소를 모아 주세요.",
       course: null,
       picks: [],
+      weather: weather.weather,
+      weatherNote: weather.note,
     } satisfies RecommendResult);
   }
 
   const ids = new Map(places.map((p, i) => [`p${i + 1}`, p]));
   const weekday = WEEKDAYS[new Date(`${date}T12:00:00+09:00`).getUTCDay()];
   const requestText = [
-    `지역: ${input.area}`,
+    `지역: ${area || "미정"}`,
     `날짜: ${date} (${weekday}요일)`,
     `시간: ${input.time || "미정"}`,
     `목적: ${input.purpose || "미정"}`,
     `동행인: ${input.companions || "미정"}`,
     input.extra && `기타 조건: ${input.extra}`,
+    weather.text ? `날씨: ${weather.text}` : "날씨: 정보 없음",
     `추천 개수: 최대 ${input.count ?? 5}곳`,
   ]
     .filter(Boolean)
@@ -76,9 +83,13 @@ export async function POST(request: Request) {
       picks: raw.picks
         .filter((pick) => ids.has(pick.id))
         .map((pick) => ({ place: ids.get(pick.id)!, reason: pick.reason, tip: pick.tip })),
+      weather: weather.weather,
+      weatherNote: weather.note,
     };
-    // The AI writes course steps with candidate ids; show place names instead.
-    if (result.course) result.course = result.course.replace(/\bp\d+\b/g, (id) => ids.get(id)?.name ?? id);
+    // The AI sometimes refers to candidates by id; show place names instead.
+    const named = (s: string) => s.replace(/\bp\d+\b/g, (id) => ids.get(id)?.name ?? id);
+    result.summary = named(result.summary);
+    if (result.course) result.course = named(result.course);
     return Response.json(result);
   } catch (e) {
     return jsonError(e instanceof Error ? e.message : "추천 중 오류가 발생했습니다.", 500);

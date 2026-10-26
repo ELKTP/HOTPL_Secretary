@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { House, Layers, LoaderCircle, LogOut, MapPin, Sparkles, Upload, type LucideIcon } from "lucide-react";
+import { House, Layers, LoaderCircle, LogOut, MapPin, SquarePlus, Upload, type LucideIcon } from "lucide-react";
 import { getSupabase } from "@/lib/supabase";
 
 const CONFIGURED = Boolean(
@@ -16,8 +16,8 @@ export const useSession = () => useContext(SessionContext)!;
 
 const NAV: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/", label: "홈", icon: House },
+  { href: "/add", label: "취향 더하기", icon: SquarePlus },
   { href: "/places", label: "내 장소", icon: Layers },
-  { href: "/recommend", label: "추천", icon: Sparkles },
   { href: "/import", label: "가져오기", icon: Upload },
 ];
 
@@ -81,13 +81,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   <Link
                     key={href}
                     href={href}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm transition ${
+                    className={`flex flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 text-[12px] transition ${
                       active
                         ? "bg-surface-3 font-medium text-fg shadow-[inset_0_0_0_1px_var(--color-line-strong)]"
                         : "text-fg-2 hover:text-fg"
                     }`}
                   >
-                    <Icon className={`h-4 w-4 ${active ? "text-accent" : ""}`} />
+                    <Icon className={`h-4.5 w-4.5 ${active ? "text-accent" : ""}`} />
                     {label}
                   </Link>
                 );
@@ -109,10 +109,80 @@ export default function AppShell({ children }: { children: ReactNode }) {
         ) : session === null ? (
           <Landing />
         ) : (
-          <SessionContext.Provider value={session}>{children}</SessionContext.Provider>
+          <SessionContext.Provider value={session}>
+            {children}
+            {pathname !== "/import" && !pathname.startsWith("/share") && <ImportWelcome userId={session.user.id} />}
+          </SessionContext.Provider>
         )}
       </main>
     </>
+  );
+}
+
+const SOURCES = ["인스타그램", "유튜브", "카카오맵", "네이버지도", "구글지도"];
+
+/** First visit with an empty library: suggest the one-time import before anything else. */
+function ImportWelcome({ userId }: { userId: string }) {
+  const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const key = `hotpl:welcomed:${userId}`;
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(key)) return;
+    } catch {
+      return;
+    }
+    getSupabase()
+      .from("places")
+      .select("id", { count: "exact", head: true })
+      .then(({ count, error }) => {
+        if (error || count === null) return;
+        if (count) localStorage.setItem(key, "1");
+        else setOpen(true);
+      });
+  }, [key]);
+
+  function close(goImport: boolean) {
+    try {
+      localStorage.setItem(key, "1");
+    } catch {}
+    setOpen(false);
+    if (goImport) router.push("/import");
+  }
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center">
+      <div role="dialog" aria-modal="true" className="card w-full max-w-md space-y-4 p-6">
+        <span className="grid h-11 w-11 place-items-center rounded-xl border border-accent-deep bg-accent-bg text-accent">
+          <Upload className="h-5 w-5" />
+        </span>
+        <div className="space-y-2">
+          <p className="eyebrow">Welcome</p>
+          <h2 className="text-xl font-bold tracking-tight">그동안 모아 둔 핫플부터 가져올까요?</h2>
+          <p className="text-sm leading-relaxed text-fg-2">
+            앱마다 저장해 둔 장소를 한 번에 가져오면 바로 약속 장소를 추천받을 수 있어요. 출처별 안내를 따라 하면 5~10분이면 충분해요.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {SOURCES.map((s) => (
+            <span key={s} className="chip border-line bg-surface-2 text-fg-2">
+              {s}
+            </span>
+          ))}
+        </div>
+        <div className="space-y-2 pt-1">
+          <button className="btn-primary w-full py-3" onClick={() => close(true)}>
+            가져오기 시작
+          </button>
+          <button className="btn-secondary w-full" onClick={() => close(false)}>
+            나중에 할게요
+          </button>
+        </div>
+        <p className="text-center text-xs text-fg-3">언제든 상단의 &lsquo;가져오기&rsquo; 탭에서 할 수 있어요.</p>
+      </div>
+    </div>
   );
 }
 

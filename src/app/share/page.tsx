@@ -85,8 +85,8 @@ export default function SharePage() {
       <p className="mt-2 max-w-xs text-sm text-fg-2">{view.body}</p>
       {state !== "saving" && (
         <div className="mt-8 flex justify-center gap-2">
-          <Link href="/" className="btn-secondary">
-            홈으로
+          <Link href="/add" className="btn-secondary">
+            최근 저장 보기
           </Link>
           <Link href="/places" className="btn-primary">
             내 장소 보기
