@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-brand: #ff5a36;
+  --color-brand-dark: #e2441f;
+  --color-brand-soft: #fff1ec;
+  --font-sans: system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: #f7f7f8;
+  color: #18181b;
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+@utility card {
+  @apply rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200;
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:opacity-50;
+}
+
+@utility btn-primary {
+  @apply btn bg-brand text-white hover:bg-brand-dark;
+}
+
+@utility btn-ghost {
+  @apply btn bg-zinc-100 text-zinc-800 hover:bg-zinc-200;
+}
+
+@utility input {
+  @apply w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20;
+}
+
+@utility chip {
+  @apply inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition;
+}
